@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Corn & Soybean Acreage — Opportunity Geography & SeedKoz</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #fff; font-family: Georgia, serif; }
+  #wrap { max-width: 960px; margin: 0 auto; padding: 24px 20px; }
+  h1 { font-size: 18px; font-weight: 700; color: #000; margin-bottom: 4px; }
+  .subtitle { font-size: 12px; color: #888; margin-bottom: 16px; }
+  #leg { display: flex; gap: 18px; padding: 0 0 10px; font-size: 12px; color: #555; flex-wrap: wrap; }
+  .leg { display: flex; align-items: center; gap: 5px; }
+  .leg-sq { width: 14px; height: 14px; display: inline-block; }
+  #map-wrap { width: 100%; border: 1px solid #000; background: #fff; }
+  #panel { border: 1px solid #000; padding: 14px; margin-top: 10px; min-height: 100px; }
+  #p-empty { font-size: 13px; color: #aaa; }
+  #p-detail { display: none; }
+  #p-name { font-size: 16px; font-weight: 700; border-bottom: 1px solid #ddd; padding-bottom: 7px; margin-bottom: 10px; color: #000; }
+  .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: #ccc; border: 1px solid #ccc; margin-bottom: 10px; }
+  .stat-cell { background: #fff; padding: 8px 10px; }
+  .stat-lbl { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 2px; }
+  .stat-val { font-size: 16px; font-weight: 700; color: #000; }
+  .stat-sub { font-size: 10px; color: #aaa; }
+  .bar-row { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; }
+  .bar-lbl { font-size: 11px; color: #666; width: 65px; text-align: right; }
+  .bar-track { flex: 1; background: #eee; height: 8px; }
+  .bar-fill { height: 8px; transition: width .3s; width: 0%; }
+  .bar-val { font-size: 11px; color: #666; width: 80px; }
+  #totals-wrap { margin-top: 10px; }
+  .tot-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; margin-bottom: 4px; }
+  .tot-hdr { padding: 8px 12px; grid-column: 1 / -1; }
+  .tot-hdr span { font-size: 11px; font-weight: 700; color: #fff; letter-spacing: .06em; text-transform: uppercase; }
+  .tot-cell { background: #fff; padding: 10px 12px; }
+  .tot-lbl { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 3px; }
+  .tot-val { font-size: 15px; font-weight: 700; color: #000; }
+  .tot-sub { font-size: 10px; color: #aaa; }
+  .note { font-size: 10px; color: #aaa; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>Corn &amp; Soybean Planted Acreage</h1>
+  <p class="subtitle">Opportunity Geography &amp; SeedKoz States — Source: USDA NASS 2025 Crop Production Summary (January 2026)</p>
+
+  <div id="leg">
+    <span class="leg"><span class="leg-sq" style="background:#111;"></span>Opportunity Geography</span>
+    <span class="leg"><span class="leg-sq" style="background:#BF0A30;"></span>Texas</span>
+    <span class="leg"><span class="leg-sq" style="background:#002868;border:2.5px solid #BF0A30;"></span>SeedKoz</span>
+    <span class="leg"><span class="leg-sq" style="background:#ddd;border:1px solid #bbb;"></span>Not in scope</span>
+  </div>
+
+  <div id="map-wrap"></div>
+
+  <div id="panel">
+    <div id="p-empty">Click any highlighted state to see acreage detail.</div>
+    <div id="p-detail">
+      <div id="p-name"></div>
+      <div class="stats-grid">
+        <div class="stat-cell"><div class="stat-lbl">Corn planted</div><div class="stat-val" id="pv-corn"></div><div class="stat-sub">thousand acres</div></div>
+        <div class="stat-cell"><div class="stat-lbl">Soybeans planted</div><div class="stat-val" id="pv-soy"></div><div class="stat-sub">thousand acres</div></div>
+        <div class="stat-cell"><div class="stat-lbl">Combined</div><div class="stat-val" id="pv-comb"></div><div class="stat-sub">thousand acres</div></div>
+      </div>
+      <div class="bar-row">
+        <span class="bar-lbl">Corn</span>
+        <div class="bar-track"><div class="bar-fill" id="bc" style="background:#111;"></div></div>
+        <span class="bar-val" id="bvc"></span>
+      </div>
+      <div class="bar-row">
+        <span class="bar-lbl">Soybeans</span>
+        <div class="bar-track"><div class="bar-fill" id="bs" style="background:#888;"></div></div>
+        <span class="bar-val" id="bvs"></span>
+      </div>
+    </div>
+  </div>
+
+  <div id="totals-wrap"></div>
+  <p class="note">Source: USDA NASS 2025 Crop Production Summary (January 2026). Corn = planted for all purposes. Figures in thousands of acres.</p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<script>
+const NAVY = '#002868';
+const RED  = '#BF0A30';
+
+const DATA = {
+  'Illinois':       {corn:11200, soy:10200, og:true,  tx:false},
+  'Indiana':        {corn:5400,  soy:5500,  og:true,  tx:false},
+  'Ohio':           {corn:3400,  soy:5300,  og:true,  tx:false},
+  'Missouri':       {corn:3800,  soy:5700,  og:true,  tx:false},
+  'Texas':          {corn:2500,  soy:90,    og:true,  tx:true},
+  'Arkansas':       {corn:810,   soy:3300,  og:false, tx:false},
+  'Kentucky':       {corn:1520,  soy:2100,  og:false, tx:false},
+  'Mississippi':    {corn:910,   soy:2550,  og:false, tx:false},
+  'Tennessee':      {corn:930,   soy:1750,  og:false, tx:false},
+  'North Carolina': {corn:950,   soy:1580,  og:false, tx:false},
+  'Pennsylvania':   {corn:1010,  soy:590,   og:false, tx:false},
+  'New York':       {corn:970,   soy:430,   og:false, tx:false},
+  'Virginia':       {corn:470,   soy:580,   og:false, tx:false},
+  'Maryland':       {corn:460,   soy:470,   og:false, tx:false},
+  'South Carolina': {corn:390,   soy:380,   og:false, tx:false},
+  'Georgia':        {corn:550,   soy:175,   og:false, tx:false},
+  'Delaware':       {corn:175,   soy:150,   og:false, tx:false},
+  'Alabama':        {corn:350,   soy:370,   og:false, tx:false},
+  'New Jersey':     {corn:75,    soy:95,    og:false, tx:false},
+  'Louisiana':      {corn:810,   soy:1020,  og:false, tx:false},
+};
+
+const FIPS = {
+  '01':'Alabama','02':'Alaska','04':'Arizona','05':'Arkansas','06':'California',
+  '08':'Colorado','09':'Connecticut','10':'Delaware','12':'Florida','13':'Georgia',
+  '15':'Hawaii','16':'Idaho','17':'Illinois','18':'Indiana','19':'Iowa',
+  '20':'Kansas','21':'Kentucky','22':'Louisiana','23':'Maine','24':'Maryland',
+  '25':'Massachusetts','26':'Michigan','27':'Minnesota','28':'Mississippi',
+  '29':'Missouri','30':'Montana','31':'Nebraska','32':'Nevada','33':'New Hampshire',
+  '34':'New Jersey','35':'New Mexico','36':'New York','37':'North Carolina',
+  '38':'North Dakota','39':'Ohio','40':'Oklahoma','41':'Oregon','42':'Pennsylvania',
+  '44':'Rhode Island','45':'South Carolina','46':'South Dakota','47':'Tennessee',
+  '48':'Texas','49':'Utah','50':'Vermont','51':'Virginia','53':'Washington',
+  '54':'West Virginia','55':'Wisconsin','56':'Wyoming'
+};
+
+const MAX = 11200;
+function fmt(n){ return n.toLocaleString(); }
+let selPath = null;
+
+function getFill(name){
+  if(!name||!DATA[name]) return '#e4e4e4';
+  const d = DATA[name];
+  if(d.tx) return RED;
+  if(d.og) return '#111';
+  return NAVY;
+}
+function getStroke(name){
+  if(!name||!DATA[name]) return '#fff';
+  const d = DATA[name];
+  if(d.tx||d.og) return '#fff';
+  return RED;
+}
+function getStrokeW(name){
+  if(!name||!DATA[name]) return 0.5;
+  return (DATA[name].og||DATA[name].tx) ? 0.5 : 2.5;
+}
+
+function buildTotals(){
+  let ogC=0,ogS=0,skC=0,skS=0;
+  Object.values(DATA).forEach(d=>{
+    if(d.og){ogC+=d.corn;ogS+=d.soy;}else{skC+=d.corn;skS+=d.soy;}
+  });
+  const cell = (label,val,sub) => `
+    <div class="tot-cell">
+      <div class="tot-lbl">${label}</div>
+      <div class="tot-val">${fmt(val)}K</div>
+      <div class="tot-sub">${sub}</div>
+    </div>`;
+  document.getElementById('totals-wrap').innerHTML = `
+    <div class="tot-grid" style="background:#000;border:1px solid #000;margin-bottom:4px;">
+      <div class="tot-hdr" style="background:#111;"><span>Opportunity Geography</span></div>
+      ${cell('Corn',ogC,'ac planted')}
+      ${cell('Soybeans',ogS,'ac planted')}
+      ${cell('Combined',ogC+ogS,'ac total')}
+    </div>
+    <div class="tot-grid" style="background:${RED};border:2.5px solid ${RED};">
+      <div class="tot-hdr" style="background:${NAVY};"><span>SeedKoz</span></div>
+      ${cell('Corn',skC,'ac planted')}
+      ${cell('Soybeans',skS,'ac planted')}
+      ${cell('Combined',skC+skS,'ac total')}
+    </div>`;
+}
+
+const ogLabel = {Illinois:'ECB',Indiana:'ECB',Ohio:'ECB',Missouri:'MO',Texas:'TX'};
+
+function showState(name){
+  const d = DATA[name]; if(!d) return;
+  if(selPath){
+    const pn = FIPS[String(selPath.__data__.id).padStart(2,'0')];
+    d3.select(selPath).attr('stroke',getStroke(pn)).attr('stroke-width',getStrokeW(pn)).attr('fill',getFill(pn)).style('filter','none');
+  }
+  document.getElementById('p-empty').style.display = 'none';
+  document.getElementById('p-detail').style.display = 'block';
+  const grp = d.og ? 'Opportunity Geography'+(ogLabel[name]?' — '+ogLabel[name]:'') : 'SeedKoz';
+  document.getElementById('p-name').textContent = name+' — '+grp;
+  document.getElementById('pv-corn').textContent = fmt(d.corn);
+  document.getElementById('pv-soy').textContent  = fmt(d.soy);
+  document.getElementById('pv-comb').textContent = fmt(d.corn+d.soy);
+  document.getElementById('bc').style.width = Math.round(d.corn/MAX*100)+'%';
+  document.getElementById('bs').style.width = Math.round(d.soy/MAX*100)+'%';
+  document.getElementById('bvc').textContent = fmt(d.corn)+'K ac';
+  document.getElementById('bvs').textContent = fmt(d.soy)+'K ac';
+}
+
+const projection = d3.geoAlbersUsa().scale(1280).translate([480,300]);
+const pathGen    = d3.geoPath().projection(projection);
+const svg        = d3.select('#map-wrap').append('svg')
+  .attr('viewBox','0 0 960 596').attr('width','100%').style('display','block');
+
+fetch('https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json')
+  .then(r => r.json())
+  .then(us => {
+    const features = topojson.feature(us, us.objects.states).features;
+    svg.selectAll('path.state').data(features).join('path')
+      .attr('class','state')
+      .attr('d', pathGen)
+      .attr('fill', d => getFill(FIPS[String(d.id).padStart(2,'0')]))
+      .attr('stroke', d => getStroke(FIPS[String(d.id).padStart(2,'0')]))
+      .attr('stroke-width', d => getStrokeW(FIPS[String(d.id).padStart(2,'0')]))
+      .style('cursor', d => { const n=FIPS[String(d.id).padStart(2,'0')]; return n&&DATA[n]?'pointer':'default'; })
+      .on('mouseover', function(e,d){
+        const n = FIPS[String(d.id).padStart(2,'0')];
+        if(n&&DATA[n]&&this!==selPath) d3.select(this).style('filter','brightness(1.35)');
+      })
+      .on('mouseout', function(e,d){
+        if(this!==selPath){
+          const n = FIPS[String(d.id).padStart(2,'0')];
+          d3.select(this).attr('stroke',getStroke(n)).attr('stroke-width',getStrokeW(n)).attr('fill',getFill(n)).style('filter','none');
+        }
+      })
+      .on('click', function(e,d){
+        const n = FIPS[String(d.id).padStart(2,'0')];
+        if(!n||!DATA[n]) return;
+        if(selPath){
+          const pn = FIPS[String(selPath.__data__.id).padStart(2,'0')];
+          d3.select(selPath).attr('stroke',getStroke(pn)).attr('stroke-width',getStrokeW(pn)).attr('fill',getFill(pn)).style('filter','none');
+        }
+        selPath = this;
+        d3.select(this).style('filter','brightness(1.4)');
+        showState(n);
+      })
+      .append('title').text(d => {
+        const n = FIPS[String(d.id).padStart(2,'0')];
+        if(!n||!DATA[n]) return n||'';
+        const sd = DATA[n];
+        return n+'\nCorn: '+fmt(sd.corn)+'K\nSoy: '+fmt(sd.soy)+'K\nCombined: '+fmt(sd.corn+sd.soy)+'K';
+      });
+    svg.append('path')
+      .datum(topojson.mesh(us, us.objects.states, (a,b) => a!==b))
+      .attr('d', pathGen).attr('fill','none')
+      .attr('stroke','rgba(255,255,255,0.3)').attr('stroke-width',0.5)
+      .attr('pointer-events','none');
+    buildTotals();
+  })
+  .catch(() => {
+    document.getElementById('map-wrap').innerHTML = '<p style="padding:20px;color:#999;font-size:13px;">Map failed to load. Please check your internet connection and refresh.</p>';
+  });
+</script>
+</body>
+</html>
